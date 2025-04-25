@@ -8,12 +8,11 @@ import { Shield, CheckCircle, Clock, Phone, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { storeHeroSubmission, getDeviceType, submitFormData } from "@/lib/form-utils"
 
 export function HeroSection() {
   const [email, setEmail] = useState("")
   const [isMobile, setIsMobile] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+
   const router = useRouter()
 
   // Detect mobile on component mount
@@ -31,31 +30,63 @@ export function HeroSection() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (email) {
-      setIsSubmitting(true)
-
       try {
-        // Prepare form data
+        // Get client IP address
+        let ipData = { ip: "" }
+        try {
+          const ipResponse = await fetch("https://api.ipify.org?format=json")
+          ipData = await ipResponse.json()
+        } catch (ipError) {
+          console.error("Error getting IP:", ipError)
+        }
+
+        // Get UTM parameters
+        const urlParams = new URLSearchParams(window.location.search)
+        const utmSource = urlParams.get("utm_source") || ""
+        const utmMedium = urlParams.get("utm_medium") || ""
+        const utmCampaign = urlParams.get("utm_campaign") || ""
+
+        // Create the submission data
         const formData = {
           email,
           source: "hero",
           submittedAt: new Date().toISOString(),
-          deviceType: getDeviceType(),
+          url: window.location.href,
+          userAgent: window.navigator.userAgent,
+          ip: ipData.ip,
+          utmSource,
+          utmMedium,
+          utmCampaign,
         }
 
-        // Store submission in session storage
-        storeHeroSubmission(formData)
+        // Send to our API route
+        const response = await fetch("/api/webhook", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(formData),
+        })
 
-        // Submit to API endpoint
-        await submitFormData(formData)
+        if (!response.ok) {
+          throw new Error("Failed to submit form")
+        }
+
+        // Store the hero submission in sessionStorage to track the journey
+        sessionStorage.setItem(
+          "heroSubmission",
+          JSON.stringify({
+            ...formData,
+            timestamp: Date.now(),
+          }),
+        )
 
         // Redirect to get-started page with email prefilled
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
       } catch (error) {
-        console.error("Error:", error)
-        // Still redirect even if submission fails
+        console.error("Error sending to API:", error)
+        // Still redirect even if API call fails
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
-      } finally {
-        setIsSubmitting(false)
       }
     }
   }
@@ -101,14 +132,9 @@ export function HeroSection() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isSubmitting}
             />
-            <Button
-              type="submit"
-              className="bg-white text-black hover:bg-white/90 whitespace-nowrap font-medium"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Submitting..." : "Get started today"}
+            <Button type="submit" className="bg-white text-black hover:bg-white/90 whitespace-nowrap font-medium">
+              Get started today
             </Button>
           </form>
         </div>

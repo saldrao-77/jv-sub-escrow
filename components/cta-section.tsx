@@ -7,7 +7,6 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { storeLastSubmission, getDeviceType, submitFormData } from "@/lib/form-utils"
 
 export function CtaSection() {
   const [email, setEmail] = useState("")
@@ -18,13 +17,29 @@ export function CtaSection() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // Simplified form submission handler
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
     try {
-      // Prepare form data
+      // Get client IP address
+      let ipData = { ip: "" }
+      try {
+        const ipResponse = await fetch("https://api.ipify.org?format=json")
+        ipData = await ipResponse.json()
+      } catch (ipError) {
+        console.error("Error getting IP:", ipError)
+      }
+
+      // Get UTM parameters
+      const urlParams = new URLSearchParams(window.location.search)
+      const utmSource = urlParams.get("utm_source") || ""
+      const utmMedium = urlParams.get("utm_medium") || ""
+      const utmCampaign = urlParams.get("utm_campaign") || ""
+
+      // Create the submission data
       const formData = {
         name,
         email,
@@ -32,23 +47,41 @@ export function CtaSection() {
         properties,
         source: "homepage",
         submittedAt: new Date().toISOString(),
-        deviceType: getDeviceType(),
+        url: window.location.href,
+        userAgent: window.navigator.userAgent,
+        ip: ipData.ip,
+        utmSource,
+        utmMedium,
+        utmCampaign,
       }
 
-      // Store submission in session storage
-      storeLastSubmission(formData)
+      // Send to our API route
+      const response = await fetch("/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
 
-      // Submit to API endpoint
-      await submitFormData(formData)
+      if (!response.ok) {
+        throw new Error("Failed to submit form")
+      }
 
-      // Redirect to the calendar page
+      // Store submission in sessionStorage to check on calendar page
+      sessionStorage.setItem(
+        "lastSubmission",
+        JSON.stringify({
+          ...formData,
+          timestamp: Date.now(),
+        }),
+      )
+
+      // Redirect to the calendar page with the submitted parameter
       router.push("/calendar?submitted=true")
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Error processing submission:", error)
       setError("There was a problem submitting the form. Please try again.")
-      // Still redirect even if submission fails
-      router.push("/calendar?submitted=true")
-    } finally {
       setIsSubmitting(false)
     }
   }
@@ -85,7 +118,6 @@ export function CtaSection() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  disabled={isSubmitting}
                 />
               </div>
 
@@ -101,7 +133,6 @@ export function CtaSection() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  disabled={isSubmitting}
                 />
               </div>
 
@@ -116,7 +147,6 @@ export function CtaSection() {
                   value={company}
                   onChange={(e) => setCompany(e.target.value)}
                   required
-                  disabled={isSubmitting}
                 />
               </div>
 
@@ -130,7 +160,6 @@ export function CtaSection() {
                   value={properties}
                   onChange={(e) => setProperties(e.target.value)}
                   required
-                  disabled={isSubmitting}
                 >
                   <option value="">Select an option</option>
                   <option value="1-5">1-5 jobs</option>

@@ -5,38 +5,26 @@ import type React from "react"
 import { useEffect, useState, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { X } from "lucide-react"
-import { submitFormData } from "@/lib/form-utils"
 
 export default function CalendarPage() {
   const searchParams = useSearchParams()
   const [showThankYou, setShowThankYou] = useState(false)
   const [isCalendlyLoading, setIsCalendlyLoading] = useState(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  // Add this state variable
+  const [zapierTriggered, setZapierTriggered] = useState(false)
 
   useEffect(() => {
     // Check if the URL has the submitted parameter
     const isSubmitted = searchParams.get("submitted") === "true"
     setShowThankYou(isSubmitted)
-
-    // Track calendar visit
-    if (isSubmitted) {
-      try {
-        // Minimal data for tracking
-        const data = {
-          event: "calendar_visit",
-          submittedAt: new Date().toISOString(),
-        }
-
-        // Submit to API endpoint
-        submitFormData(data).catch((err) => console.error("Webhook error:", err))
-      } catch (error) {
-        console.error("Error triggering webhook:", error)
-      }
-    }
   }, [searchParams])
 
   const handleClosePopup = () => {
+    // Simply hide the popup
     setShowThankYou(false)
+
+    // Update the URL without causing a page reload
     const newUrl = window.location.pathname
     window.history.pushState({}, "", newUrl)
   }
@@ -45,11 +33,78 @@ export default function CalendarPage() {
     setIsCalendlyLoading(false)
   }
 
+  // Add click outside handler
   const handlePopupBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking the backdrop, not the popup content
     if (e.target === e.currentTarget) {
       handleClosePopup()
     }
   }
+
+  // Add escape key handler
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && showThankYou) {
+        handleClosePopup()
+      }
+    }
+
+    window.addEventListener("keydown", handleEscKey)
+    return () => window.removeEventListener("keydown", handleEscKey)
+  }, [showThankYou])
+
+  // Add this effect to track calendar page visits after form submission
+  useEffect(() => {
+    // Check if the URL has the submitted parameter
+    const isSubmitted = searchParams.get("submitted") === "true"
+
+    // Trigger API webhook for calendar page visits with submitted=true
+    if (isSubmitted && !zapierTriggered) {
+      const triggerWebhook = async () => {
+        try {
+          // Check if we have a recent submission in sessionStorage
+          const lastSubmission = sessionStorage.getItem("lastSubmission")
+          let submissionData = {}
+
+          if (lastSubmission) {
+            try {
+              const parsedSubmission = JSON.parse(lastSubmission)
+              // Only use if it's recent (within last 5 minutes)
+              if (Date.now() - parsedSubmission.timestamp < 5 * 60 * 1000) {
+                submissionData = parsedSubmission
+              }
+            } catch (e) {
+              console.error("Error parsing last submission:", e)
+            }
+          }
+
+          // Prepare data for the webhook
+          const data = {
+            event: "calendar_visit",
+            submittedAt: new Date().toISOString(),
+            url: window.location.href,
+            userAgent: window.navigator.userAgent,
+            ...submissionData,
+          }
+
+          // Send to our API route
+          await fetch("/api/webhook", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          })
+
+          setZapierTriggered(true)
+        } catch (error) {
+          console.error("Error triggering webhook:", error)
+        }
+      }
+
+      triggerWebhook()
+    }
+  }, [searchParams, zapierTriggered])
 
   return (
     <main className="min-h-screen bg-black text-white pt-28 pb-16">
@@ -112,7 +167,7 @@ export default function CalendarPage() {
 
         <div className="max-w-5xl mx-auto">
           {isCalendlyLoading && (
-            <div className="rounded-lg overflow-hidden bg-zinc-900 h-[600px] w-full flex flex-col items-center justify-center p-8">
+            <div className="rounded-lg overflow-hidden bg-zinc-900 h-[900px] w-full flex flex-col items-center justify-center p-8">
               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
               <p className="text-white/70">Loading calendar...</p>
             </div>
@@ -121,7 +176,7 @@ export default function CalendarPage() {
             ref={iframeRef}
             src="https://calendly.com/srao77/jobvault"
             width="100%"
-            height="600"
+            height="900"
             frameBorder="0"
             title="Schedule a demo with JobVault"
             className={`rounded-lg ${isCalendlyLoading ? "hidden" : "block"}`}

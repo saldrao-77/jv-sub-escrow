@@ -59,34 +59,39 @@ export function saveFormSubmission(data: any) {
   }
 }
 
-// Zapier integration - ensure this is working
+// Keep Zapier integration unchanged
 export async function submitToZapier(data: any) {
   try {
     console.log("📤 Submitting to Zapier:", data)
 
-    // Direct fetch to Zapier webhook
-    const response = await fetch("https://hooks.zapier.com/hooks/catch/22588169/2xewy7p/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    })
+    // Use a try-catch specifically for the fetch operation
+    try {
+      const response = await fetch("https://hooks.zapier.com/hooks/catch/22588169/2xewy7p/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      })
 
-    if (!response.ok) {
-      console.error(`Zapier webhook failed with status: ${response.status}`)
+      if (!response.ok) {
+        console.error(`Zapier webhook failed with status: ${response.status}`)
+        return false
+      }
+
+      console.log("✅ Zapier webhook fired successfully")
+      return true
+    } catch (fetchError) {
+      console.error("❌ Fetch error when submitting to Zapier:", fetchError)
       return false
     }
-
-    console.log("✅ Zapier webhook fired successfully")
-    return true
-  } catch (fetchError) {
-    console.error("❌ Error when submitting to Zapier:", fetchError)
+  } catch (error) {
+    console.error("❌ Error preparing Zapier submission:", error)
     return false
   }
 }
 
-// Unified form handler for all forms - ensure Zapier is called
+// Unified form handler for all forms
 export async function handleFormSubmission(formData: any, source: string) {
   // Create submission data
   const data = {
@@ -99,26 +104,12 @@ export async function handleFormSubmission(formData: any, source: string) {
   // Save to localStorage first
   const savedLocally = saveFormSubmission(data)
 
-  // Always try to submit to API which will handle both Supabase and Zapier
+  // Then try Zapier, but continue even if it fails
   try {
-    const apiResponse = await fetch("/api/webhook", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    })
-
-    if (!apiResponse.ok) {
-      console.error("API submission failed:", await apiResponse.text())
-    }
+    await submitToZapier(data)
   } catch (error) {
-    console.error("Error submitting to API:", error)
-
-    // Fallback: Try direct Zapier submission if API fails
-    try {
-      await submitToZapier(data)
-    } catch (zapierError) {
-      console.error("Fallback Zapier submission failed:", zapierError)
-    }
+    console.error("Error submitting to Zapier:", error)
+    // Continue execution even if Zapier fails
   }
 
   return savedLocally

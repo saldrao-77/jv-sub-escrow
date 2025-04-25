@@ -7,13 +7,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import {
-  isFromHeroForm,
-  storeLastSubmission,
-  clearHeroSubmission,
-  getDeviceType,
-  submitFormData,
-} from "@/lib/form-utils"
+
+// Add these state variables and effects
+// const searchParams = useSearchParams() // REMOVE THIS
+// const [isFromHero, setIsFromHero] = useState(false) // REMOVE THIS
 
 export default function GetStartedPage() {
   const searchParams = useSearchParams()
@@ -24,21 +21,54 @@ export default function GetStartedPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const [isFromHero, setIsFromHero] = useState(false) // ADD THIS
 
   useEffect(() => {
+    // Check if coming from hero form
+    const fromHero = searchParams.get("from") === "hero"
+    setIsFromHero(fromHero)
+
+    // Pre-fill email if provided in URL
     const emailParam = searchParams.get("email")
     if (emailParam) {
       setEmail(emailParam)
     }
   }, [searchParams])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Simplified form submission handler
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
     try {
-      // Prepare form data
+      // Get client IP address
+      let ipData = { ip: "" }
+      try {
+        const ipResponse = await fetch("https://api.ipify.org?format=json")
+        ipData = await ipResponse.json()
+      } catch (ipError) {
+        console.error("Error getting IP:", ipError)
+      }
+
+      // Get UTM parameters
+      const urlParams = new URLSearchParams(window.location.search)
+      const utmSource = urlParams.get("utm_source") || ""
+      const utmMedium = urlParams.get("utm_medium") || ""
+      const utmCampaign = urlParams.get("utm_campaign") || ""
+
+      // Get hero submission data if available
+      let heroData = null
+      try {
+        const heroSubmissionStr = sessionStorage.getItem("heroSubmission")
+        if (heroSubmissionStr) {
+          heroData = JSON.parse(heroSubmissionStr)
+        }
+      } catch (e) {
+        console.error("Error parsing hero submission:", e)
+      }
+
+      // Create the submission data
       const formData = {
         name,
         email,
@@ -46,27 +76,46 @@ export default function GetStartedPage() {
         properties,
         source: "get-started",
         submittedAt: new Date().toISOString(),
-        deviceType: getDeviceType(),
-        isFromHero: isFromHeroForm(),
+        url: window.location.href,
+        userAgent: window.navigator.userAgent,
+        ip: ipData.ip,
+        utmSource,
+        utmMedium,
+        utmCampaign,
+        isFromHero: isFromHero || !!heroData,
+        heroSubmissionTime: heroData?.timestamp ? new Date(heroData.timestamp).toISOString() : null,
       }
 
-      // Store submission in session storage
-      storeLastSubmission(formData)
+      // Send to our API route
+      const response = await fetch("/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
 
-      // Submit to API endpoint
-      await submitFormData(formData)
+      if (!response.ok) {
+        throw new Error("Failed to submit form")
+      }
+
+      // Store submission in sessionStorage to check on calendar page
+      sessionStorage.setItem(
+        "lastSubmission",
+        JSON.stringify({
+          ...formData,
+          timestamp: Date.now(),
+        }),
+      )
 
       // Clear hero submission data after successful get-started submission
-      clearHeroSubmission()
+      sessionStorage.removeItem("heroSubmission")
 
-      // Redirect to the calendar page
+      // Redirect to the calendar page with the submitted parameter
       router.push("/calendar?submitted=true")
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Error processing submission:", error)
       setError("There was a problem submitting the form. Please try again.")
-      // Still redirect even if submission fails
-      router.push("/calendar?submitted=true")
-    } finally {
       setIsSubmitting(false)
     }
   }
@@ -83,7 +132,7 @@ export default function GetStartedPage() {
           {error && (
             <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-4">{error}</div>
           )}
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium mb-1">
                 Full Name *
@@ -95,7 +144,6 @@ export default function GetStartedPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                disabled={isSubmitting}
               />
             </div>
 
@@ -111,7 +159,6 @@ export default function GetStartedPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isSubmitting}
               />
             </div>
 
@@ -126,7 +173,6 @@ export default function GetStartedPage() {
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 required
-                disabled={isSubmitting}
               />
             </div>
 
@@ -140,7 +186,6 @@ export default function GetStartedPage() {
                 value={properties}
                 onChange={(e) => setProperties(e.target.value)}
                 required
-                disabled={isSubmitting}
               >
                 <option value="">Select an option</option>
                 <option value="1-5">1-5 jobs</option>

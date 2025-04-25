@@ -1,426 +1,571 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { createClientSupabaseClient } from "@/lib/supabase"
-import { ArrowUpDown, RefreshCw, Download, Search, Calendar, Edit, Trash2 } from "lucide-react"
+import { createClient } from "@supabase/supabase-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import Image from "next/image"
-import Link from "next/link"
+import { RefreshCw, Download, Search, ArrowUpDown, Trash2, Save, X, Edit2, Smartphone, Monitor } from "lucide-react"
+
+// Create a Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Define the submission type
+type Submission = {
+  id: number
+  name: string
+  email: string
+  company: string
+  properties: string
+  form_source: string
+  source: string
+  url: string
+  user_agent: string
+  ip_address: string
+  utm_source: string
+  utm_medium: string
+  utm_campaign: string
+  device_type: string
+  status: "pending" | "processed"
+  notes: string
+  submitted_at: string
+  created_at: string
+  isNew?: boolean
+}
 
 export default function AdminPage() {
-  const [submissions, setSubmissions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState("All Statuses")
-  const [sourceFilter, setSourceFilter] = useState("All Sources")
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [filteredSubmissions, setFilteredSubmissions] = useState<Submission[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [sourceFilter, setSourceFilter] = useState("all")
+  const [deviceFilter, setDeviceFilter] = useState("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [isLoading, setIsLoading] = useState(true)
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [editingNotes, setEditingNotes] = useState<number | null>(null)
+  const [notesText, setNotesText] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
-  // Stats
-  const [totalCount, setTotalCount] = useState(0)
-  const [pendingCount, setPendingCount] = useState(0)
-  const [processedCount, setProcessedCount] = useState(0)
+  // Load submissions from Supabase
+  const loadSubmissions = async () => {
+    setIsLoading(true)
+    setError(null)
 
-  // Fetch submissions from Supabase
-  const fetchSubmissions = async () => {
-    setLoading(true)
     try {
-      const supabase = createClientSupabaseClient()
-      const { data, error } = await supabase
-        .from("jv_sub_e")
-        .select("*")
-        .order("created_at", { ascending: sortDirection === "asc" })
+      const { data, error } = await supabase.from("jv_sub_e").select("*").order("submitted_at", { ascending: false })
 
       if (error) {
-        console.error("Supabase error:", error)
-      } else {
-        setSubmissions(data || [])
-
-        // Calculate stats
-        setTotalCount(data?.length || 0)
-
-        const pending = data?.filter((item) => item.status === "Pending" || !item.status).length || 0
-        setPendingCount(pending)
-
-        const processed = data?.filter((item) => item.status === "Processed").length || 0
-        setProcessedCount(processed)
+        throw error
       }
-    } catch (err) {
-      console.error("Failed to fetch submissions:", err)
+
+      if (data) {
+        setSubmissions(data)
+        setFilteredSubmissions(data)
+      }
+    } catch (error) {
+      console.error("Error loading submissions:", error)
+      setError("Failed to load submissions. Please try again.")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
+  // Load submissions on component mount
   useEffect(() => {
-    fetchSubmissions()
-  }, [sortDirection])
+    loadSubmissions()
+  }, [])
 
-  // Filter submissions based on search query, status, source, and date range
-  const filteredSubmissions = submissions.filter((submission) => {
-    // Search filter
-    const searchFields = [submission.name, submission.email, submission.company, submission.properties]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase()
+  // Filter submissions based on search, status, source, device, and date range
+  useEffect(() => {
+    let filtered = [...submissions]
 
-    const matchesSearch = searchQuery === "" || searchFields.includes(searchQuery.toLowerCase())
-
-    // Status filter
-    const matchesStatus =
-      statusFilter === "All Statuses" ||
-      submission.status === statusFilter ||
-      (statusFilter === "Pending" && !submission.status)
-
-    // Source filter
-    const matchesSource = sourceFilter === "All Sources" || submission.source === sourceFilter
-
-    // Date filter
-    let matchesDate = true
-    if (startDate && endDate) {
-      const submissionDate = new Date(submission.created_at)
-      const start = new Date(startDate)
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999) // Set to end of day
-      matchesDate = submissionDate >= start && submissionDate <= end
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (sub) =>
+          (sub.name && sub.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sub.email && sub.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sub.company && sub.company.toLowerCase().includes(searchTerm.toLowerCase())),
+      )
     }
 
-    return matchesSearch && matchesStatus && matchesSource && matchesDate
-  })
-
-  // Handle status change
-  const handleStatusChange = async (id: string, newStatus: string) => {
-    try {
-      const supabase = createClientSupabaseClient()
-      const { error } = await supabase.from("jv_sub_e").update({ status: newStatus }).eq("id", id)
-
-      if (error) {
-        console.error("Error updating status:", error)
-      } else {
-        // Update local state
-        setSubmissions(submissions.map((sub) => (sub.id === id ? { ...sub, status: newStatus } : sub)))
-
-        // Update counts
-        if (newStatus === "Processed") {
-          setPendingCount((prev) => prev - 1)
-          setProcessedCount((prev) => prev + 1)
-        } else if (newStatus === "Pending") {
-          setProcessedCount((prev) => prev - 1)
-          setPendingCount((prev) => prev + 1)
-        }
-      }
-    } catch (err) {
-      console.error("Failed to update status:", err)
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((sub) => sub.status === statusFilter)
     }
+
+    // Filter by source
+    if (sourceFilter !== "all") {
+      filtered = filtered.filter((sub) => sub.form_source === sourceFilter)
+    }
+
+    // Filter by device
+    if (deviceFilter !== "all") {
+      filtered = filtered.filter((sub) => sub.device_type === deviceFilter)
+    }
+
+    // Filter by date range
+    if (startDate) {
+      filtered = filtered.filter((sub) => new Date(sub.submitted_at) >= new Date(startDate))
+    }
+
+    if (endDate) {
+      filtered = filtered.filter((sub) => new Date(sub.submitted_at) <= new Date(endDate + "T23:59:59"))
+    }
+
+    // Sort by date
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.submitted_at).getTime()
+      const dateB = new Date(b.submitted_at).getTime()
+      return sortOrder === "desc" ? dateB - dateA : dateA - dateB
+    })
+
+    setFilteredSubmissions(filtered)
+  }, [submissions, searchTerm, statusFilter, sourceFilter, deviceFilter, startDate, endDate, sortOrder])
+
+  // Handle refresh
+  const handleRefresh = () => {
+    loadSubmissions()
   }
 
-  // Handle delete
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this submission?")) return
-
-    try {
-      const supabase = createClientSupabaseClient()
-      const { error } = await supabase.from("jv_sub_e").delete().eq("id", id)
-
-      if (error) {
-        console.error("Error deleting submission:", error)
-      } else {
-        // Update local state
-        const deletedSubmission = submissions.find((sub) => sub.id === id)
-        setSubmissions(submissions.filter((sub) => sub.id !== id))
-
-        // Update counts
-        setTotalCount((prev) => prev - 1)
-        if (deletedSubmission?.status === "Processed") {
-          setProcessedCount((prev) => prev - 1)
-        } else {
-          setPendingCount((prev) => prev - 1)
-        }
-      }
-    } catch (err) {
-      console.error("Failed to delete submission:", err)
-    }
-  }
-
-  // Export to CSV
-  const exportToCSV = () => {
-    const headers = ["Name", "Email", "Company", "Properties", "Status", "Date", "Form Source", "Table", "Notes"]
+  // Handle export to CSV
+  const handleExportCSV = () => {
+    const headers = [
+      "ID",
+      "Name",
+      "Email",
+      "Company",
+      "Properties",
+      "Form Source",
+      "Status",
+      "Date",
+      "Device",
+      "UTM Source",
+      "UTM Medium",
+      "UTM Campaign",
+      "Notes",
+    ]
 
     const csvData = filteredSubmissions.map((sub) => [
+      sub.id,
       sub.name || "",
       sub.email || "",
       sub.company || "",
       sub.properties || "",
-      sub.status || "Pending",
-      new Date(sub.created_at).toLocaleString(),
-      sub.source || "",
-      "jv_sub_e",
-      "",
+      sub.form_source || "",
+      sub.status || "",
+      new Date(sub.submitted_at).toLocaleString(),
+      sub.device_type || "",
+      sub.utm_source || "",
+      sub.utm_medium || "",
+      sub.utm_campaign || "",
+      sub.notes || "",
     ])
 
-    const csvContent = [
-      headers.join(","),
-      ...csvData.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
-    ].join("\n")
+    const csvContent = [headers.join(","), ...csvData.map((row) => row.join(","))].join("\n")
 
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)
-    link.setAttribute("download", `jobvault-submissions-${new Date().toISOString().split("T")[0]}.csv`)
+    link.setAttribute("download", `jobvault-leads-${new Date().toISOString().split("T")[0]}.csv`)
+    link.style.visibility = "hidden"
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
-  // Toggle sort direction
-  const toggleSortDirection = () => {
-    setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))
+  // Toggle sort order
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === "desc" ? "asc" : "desc")
   }
 
+  // Handle status change
+  const handleStatusChange = async (id: number, newStatus: "pending" | "processed") => {
+    try {
+      const { error } = await supabase.from("jv_sub_e").update({ status: newStatus }).eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Update local state
+      setSubmissions((prev) => prev.map((sub) => (sub.id === id ? { ...sub, status: newStatus } : sub)))
+    } catch (error) {
+      console.error("Error updating status:", error)
+      setError("Failed to update status. Please try again.")
+    }
+  }
+
+  // Handle delete submission
+  const handleDeleteSubmission = async (id: number) => {
+    if (window.confirm("Are you sure you want to delete this submission?")) {
+      try {
+        const { error } = await supabase.from("jv_sub_e").delete().eq("id", id)
+
+        if (error) {
+          throw error
+        }
+
+        // Update local state
+        setSubmissions((prev) => prev.filter((sub) => sub.id !== id))
+      } catch (error) {
+        console.error("Error deleting submission:", error)
+        setError("Failed to delete submission. Please try again.")
+      }
+    }
+  }
+
+  // Start editing notes
+  const startEditingNotes = (id: number, currentNotes: string) => {
+    setEditingNotes(id)
+    setNotesText(currentNotes || "")
+  }
+
+  // Save notes
+  const saveNotes = async (id: number) => {
+    try {
+      const { error } = await supabase.from("jv_sub_e").update({ notes: notesText }).eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Update local state
+      setSubmissions((prev) => prev.map((sub) => (sub.id === id ? { ...sub, notes: notesText } : sub)))
+
+      setEditingNotes(null)
+    } catch (error) {
+      console.error("Error saving notes:", error)
+      setError("Failed to save notes. Please try again.")
+    }
+  }
+
+  // Cancel editing notes
+  const cancelEditingNotes = () => {
+    setEditingNotes(null)
+    setNotesText("")
+  }
+
+  // Count submissions by status and device
+  const totalCount = submissions.length
+  const pendingCount = submissions.filter((sub) => sub.status === "pending").length
+  const processedCount = submissions.filter((sub) => sub.status === "processed").length
+  const mobileCount = submissions.filter((sub) => sub.device_type === "mobile").length
+  const desktopCount = submissions.filter((sub) => sub.device_type === "desktop").length
+
   return (
-    <div className="min-h-screen bg-black text-white pt-24 pb-20">
+    <main className="min-h-screen bg-black text-white pt-32 pb-20">
       <div className="container mx-auto px-4">
-        {/* Header with logo */}
-        <div className="flex justify-between items-center mb-8">
-          <Link href="/" className="flex items-center space-x-2">
-            <Image
-              src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screenshot%2B2024-02-06%2Bat%2B9.10.01%E2%80%AFPM_prev_ui-u8gmYbsyJFmS3MgH5m6ulUfzoQgiqp.png"
-              alt="JobVault"
-              width={150}
-              height={40}
-              priority
-              className="h-10 w-auto"
-            />
-          </Link>
-
-          <div className="flex items-center space-x-4">
-            <Link href="/">
-              <Button variant="ghost" className="text-white/80 hover:text-white">
-                Home
-              </Button>
-            </Link>
-            <Link href="/faq">
-              <Button variant="ghost" className="text-white/80 hover:text-white">
-                FAQ
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="ghost" className="text-white/80 hover:text-white">
-                Pricing
-              </Button>
-            </Link>
-            <Link href="/about">
-              <Button variant="ghost" className="text-white/80 hover:text-white">
-                About Us
-              </Button>
-            </Link>
-            <Link href="/get-started">
-              <Button variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-                Get Started
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Dashboard header */}
-        <h1 className="text-4xl font-bold mb-6">Lead Submissions Dashboard</h1>
-
-        <div className="flex items-center mb-6">
-          <div className="flex items-center space-x-2 text-white/70">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M4 4h16v16H4V4z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <span>Current Table:</span>
-            <span className="bg-zinc-800 px-3 py-1 rounded-md">Property Management</span>
-          </div>
-
-          <div className="ml-auto flex space-x-2">
-            <Button variant="outline" className="flex items-center gap-2" onClick={toggleSortDirection}>
-              Newest First <ArrowUpDown className="h-4 w-4" />
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+          <h1 className="text-3xl md:text-4xl font-bold font-heading">Lead Submissions Dashboard</h1>
+          <div className="flex gap-4 mt-4 md:mt-0">
+            <Button variant="outline" className="flex items-center gap-2" onClick={toggleSortOrder}>
+              {sortOrder === "desc" ? "Newest First" : "Oldest First"}
             </Button>
-
-            <Button variant="outline" className="flex items-center gap-2" onClick={fetchSubmissions}>
-              <RefreshCw className="h-4 w-4" /> Refresh Data
+            <Button variant="outline" className="flex items-center gap-2" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4" />
+              Refresh Data
             </Button>
-
-            <Button variant="outline" className="flex items-center gap-2" onClick={exportToCSV}>
-              <Download className="h-4 w-4" /> Export CSV
+            <Button variant="outline" className="flex items-center gap-2" onClick={handleExportCSV}>
+              <Download className="h-4 w-4" />
+              Export CSV
             </Button>
           </div>
         </div>
 
-        {/* Filters */}
+        {error && (
+          <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-4">{error}</div>
+        )}
+
         <div className="bg-zinc-900 rounded-lg p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
-              <label className="block text-sm font-medium mb-1">Search</label>
+              <label htmlFor="search" className="block text-xs font-medium mb-1">
+                Search
+              </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
                 <Input
+                  id="search"
                   type="text"
                   placeholder="Search by name, email, company..."
                   className="pl-10 bg-zinc-800 border-zinc-700"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
+              <label htmlFor="status" className="block text-xs font-medium mb-1">
+                Status
+              </label>
               <select
+                id="status"
                 className="w-full rounded-md bg-zinc-800 border-zinc-700 p-2"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="All Statuses">All Statuses</option>
-                <option value="Pending">Pending</option>
-                <option value="Processed">Processed</option>
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="processed">Processed</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Form Source</label>
+              <label htmlFor="source" className="block text-xs font-medium mb-1">
+                Source
+              </label>
               <select
+                id="source"
                 className="w-full rounded-md bg-zinc-800 border-zinc-700 p-2"
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
               >
-                <option value="All Sources">All Sources</option>
+                <option value="all">All Sources</option>
                 <option value="hero">Hero</option>
-                <option value="get-started">Get Started</option>
                 <option value="homepage">Homepage</option>
+                <option value="get-started">Get Started</option>
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">Start Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
-                  <Input
-                    type="date"
-                    className="pl-10 bg-zinc-800 border-zinc-700"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">End Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
-                  <Input
-                    type="date"
-                    className="pl-10 bg-zinc-800 border-zinc-700"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
+            <div>
+              <label htmlFor="device" className="block text-xs font-medium mb-1">
+                Device
+              </label>
+              <select
+                id="device"
+                className="w-full rounded-md bg-zinc-800 border-zinc-700 p-2"
+                value={deviceFilter}
+                onChange={(e) => setDeviceFilter(e.target.value)}
+              >
+                <option value="all">All Devices</option>
+                <option value="mobile">Mobile</option>
+                <option value="desktop">Desktop</option>
+              </select>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="flex flex-wrap gap-4 mt-4">
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label htmlFor="startDate" className="block text-xs font-medium mb-1">
+                Start Date
+              </label>
+              <Input
+                id="startDate"
+                type="date"
+                className="bg-zinc-800 border-zinc-700"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="endDate" className="block text-xs font-medium mb-1">
+                End Date
+              </label>
+              <Input
+                id="endDate"
+                type="date"
+                className="bg-zinc-800 border-zinc-700"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-6 mt-6">
             <div className="text-sm">
-              <span className="text-white/70">Total:</span> <span className="font-bold">{totalCount}</span>
+              <span className="text-white/60">Total:</span> <span className="font-bold">{totalCount}</span>
             </div>
             <div className="text-sm">
-              <span className="text-white/70">Pending:</span> <span className="font-bold">{pendingCount}</span>
+              <span className="text-white/60">Pending:</span>{" "}
+              <span className="font-bold text-yellow-400">{pendingCount}</span>
             </div>
             <div className="text-sm">
-              <span className="text-white/70">Processed:</span> <span className="font-bold">{processedCount}</span>
+              <span className="text-white/60">Processed:</span>{" "}
+              <span className="font-bold text-green-400">{processedCount}</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-white/60">Mobile:</span>{" "}
+              <span className="font-bold text-blue-400">{mobileCount}</span>
+            </div>
+            <div className="text-sm">
+              <span className="text-white/60">Desktop:</span>{" "}
+              <span className="font-bold text-purple-400">{desktopCount}</span>
             </div>
           </div>
         </div>
 
-        {/* Submissions table */}
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        ) : filteredSubmissions.length > 0 ? (
+        <div className="bg-zinc-900 rounded-lg overflow-hidden text-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-zinc-800 text-left">
-                <tr>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Name</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Email</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Company</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Properties</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Status</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">
-                    Date <ArrowUpDown className="inline h-3 w-3 ml-1" />
+              <thead>
+                <tr className="bg-zinc-800">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Name
                   </th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Form Source</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Table</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Notes</th>
-                  <th className="px-4 py-3 uppercase text-xs font-semibold">Actions</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Company
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Properties
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    <div className="flex items-center gap-1 cursor-pointer" onClick={toggleSortOrder}>
+                      Date
+                      <ArrowUpDown className="h-3 w-3" />
+                    </div>
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Source
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Device
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Notes
+                  </th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-white/60 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredSubmissions.map((submission, index) => (
-                  <tr key={submission.id || index} className="border-t border-zinc-800">
-                    <td className="px-4 py-3">{submission.name || "-"}</td>
-                    <td className="px-4 py-3">{submission.email || "-"}</td>
-                    <td className="px-4 py-3">{submission.company || "-"}</td>
-                    <td className="px-4 py-3">{submission.properties || "-"}</td>
-                    <td className="px-4 py-3">
-                      <select
-                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1"
-                        value={submission.status || "Pending"}
-                        onChange={(e) => handleStatusChange(submission.id, e.target.value)}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Processed">Processed</option>
-                      </select>
-                    </td>
-                    <td className="px-4 py-3">{new Date(submission.created_at).toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <span className="bg-blue-900/30 text-blue-400 px-2 py-1 rounded text-xs">
-                        {submission.source || "homepage"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-blue-400">jv_pm</span>
-                    </td>
-                    <td className="px-4 py-3 text-white/60">No notes</td>
-                    <td className="px-4 py-3">
-                      <div className="flex space-x-2">
-                        <button className="text-white/70 hover:text-white" title="Edit">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          className="text-white/70 hover:text-red-400"
-                          title="Delete"
-                          onClick={() => handleDelete(submission.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+              <tbody className="divide-y divide-zinc-800">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-white/60">Loading submissions...</p>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : filteredSubmissions.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-6 py-20 text-center text-white/60">
+                      No submissions found matching your filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSubmissions.map((submission) => (
+                    <tr
+                      key={submission.id}
+                      className={`hover:bg-zinc-800/50 ${submission.isNew ? "bg-blue-900/20" : ""}`}
+                    >
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.name || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.email || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.company || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.properties || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                        <select
+                          className="bg-zinc-800 border-zinc-700 rounded p-1 text-xs w-24"
+                          value={submission.status}
+                          onChange={(e) => handleStatusChange(submission.id, e.target.value as "pending" | "processed")}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="processed">Processed</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                        {new Date(submission.submitted_at).toLocaleDateString() +
+                          " " +
+                          new Date(submission.submitted_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                      </td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 text-xs rounded-full bg-blue-900/20 text-blue-400">
+                          {submission.form_source}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                        {submission.device_type === "mobile" ? (
+                          <span className="flex items-center gap-1 text-blue-400">
+                            <Smartphone className="h-3 w-3" /> Mobile
+                          </span>
+                        ) : submission.device_type === "desktop" ? (
+                          <span className="flex items-center gap-1 text-purple-400">
+                            <Monitor className="h-3 w-3" /> Desktop
+                          </span>
+                        ) : (
+                          <span className="text-white/40">Unknown</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 max-w-[200px]">
+                        {editingNotes === submission.id ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              className="w-full h-16 bg-zinc-800 border-zinc-700 rounded p-1 text-xs"
+                              value={notesText}
+                              onChange={(e) => setNotesText(e.target.value)}
+                              placeholder="Add notes here..."
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-1 py-1 h-8"
+                                onClick={() => saveNotes(submission.id)}
+                              >
+                                <Save className="h-3 w-3" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-1 py-1 h-8"
+                                onClick={cancelEditingNotes}
+                              >
+                                <X className="h-3 w-3" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start justify-between">
+                            <div className="text-xs text-white/80 max-w-[180px] break-words">
+                              {submission.notes || <span className="text-white/40 italic">No notes</span>}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="ml-2"
+                              onClick={() => startEditingNotes(submission.id, submission.notes)}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          onClick={() => handleDeleteSubmission(submission.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
-        ) : (
-          <div className="text-center py-12 bg-zinc-900 rounded-lg">
-            <p>No submissions found matching your filters.</p>
-          </div>
-        )}
+        </div>
       </div>
-    </div>
+    </main>
   )
 }
