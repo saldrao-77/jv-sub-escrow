@@ -4,15 +4,10 @@ import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { supabaseAuth } from "@/lib/auth"
 
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [session, setSession] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const router = useRouter()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,29 +16,6 @@ export function Navbar() {
 
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
-
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data } = await supabaseAuth.auth.getSession()
-        setSession(data.session)
-      } catch (error) {
-        console.error("Error checking session:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    checkSession()
-
-    const { data: authListener } = supabaseAuth.auth.onAuthStateChange((event, session) => {
-      setSession(session)
-    })
-
-    return () => {
-      authListener.subscription.unsubscribe()
-    }
   }, [])
 
   const toggleMobileMenu = () => {
@@ -86,21 +58,6 @@ export function Navbar() {
               Get Started
             </Button>
           </Link>
-
-          {!loading &&
-            (session ? (
-              <Link href="/dashboard" className="text-sm text-white/90 hover:text-white">
-                <Button variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-                  Dashboard
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/login" className="text-sm text-white/90 hover:text-white">
-                <Button variant="outline" className="border-white text-white hover:bg-white hover:text-black">
-                  Sign In
-                </Button>
-              </Link>
-            ))}
         </div>
 
         <Button className="md:hidden" variant="ghost" size="icon" onClick={toggleMobileMenu}>
@@ -162,24 +119,6 @@ export function Navbar() {
             >
               Get Started
             </Link>
-            {!loading &&
-              (session ? (
-                <Link
-                  href="/dashboard"
-                  className="text-white py-2 px-4 hover:bg-zinc-800 rounded-md"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Dashboard
-                </Link>
-              ) : (
-                <Link
-                  href="/login"
-                  className="text-white py-2 px-4 hover:bg-zinc-800 rounded-md"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Sign In
-                </Link>
-              ))}
           </div>
         </div>
       )}

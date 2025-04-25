@@ -4,20 +4,10 @@ import type React from "react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shield, CheckCircle, Clock } from "lucide-react"
+import { Shield, CheckCircle, Clock, Phone, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { ContactButtons } from "@/components/contact-buttons"
-
-// Dummy ContactButtons component to resolve the undeclared variable issue
-// const ContactButtons = () => {
-//   return (
-//     <div>
-//       {/* Add your contact buttons here */}
-//     </div>
-//   )
-// }
 
 export function HeroSection() {
   const [email, setEmail] = useState("")
@@ -92,8 +82,21 @@ export function HeroSection() {
           </form>
         </div>
 
-        {/* Add Contact Buttons */}
-        <ContactButtons />
+        {/* Call and Text buttons */}
+        <div className="flex flex-wrap justify-center gap-4 mb-8">
+          <a href="tel:2625018982" className="inline-flex">
+            <Button variant="outline" className="bg-white/10 border-0 hover:bg-white/20 rounded-full px-6 gap-2">
+              <Phone className="h-4 w-4 text-blue-400" />
+              Call Us
+            </Button>
+          </a>
+          <a href="sms:2625018982" className="inline-flex">
+            <Button variant="outline" className="bg-white/10 border-0 hover:bg-white/20 rounded-full px-6 gap-2">
+              <MessageSquare className="h-4 w-4 text-blue-400" />
+              Text Us
+            </Button>
+          </a>
+        </div>
 
         <div className="flex flex-wrap justify-center gap-6 text-sm">
           <div className="bg-white/10 px-4 py-2 rounded-full flex items-center gap-2">

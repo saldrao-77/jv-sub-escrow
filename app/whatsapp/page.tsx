@@ -2,10 +2,10 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 export const metadata: Metadata = {
-  title: "JobVault for Contractors",
+  title: "JobVault | Get paid upfront for every job",
   description: "Stop waiting on customer deposits or fronting your own cash for materials.",
   openGraph: {
-    title: "JobVault for Contractors",
+    title: "JobVault | Get paid upfront for every job",
     description: "Stop waiting on customer deposits or fronting your own cash for materials.",
     images: [
       {

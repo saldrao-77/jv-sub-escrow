@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
-import { saveFormSubmission, submitToZapier } from "@/lib/utils"
+import { useState } from "react"
+import { handleFormSubmission } from "@/lib/utils"
 
 export function CtaSection() {
   const [email, setEmail] = useState("")
@@ -16,61 +16,29 @@ export function CtaSection() {
   const [properties, setProperties] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
   const router = useRouter()
 
-  // Check if device is mobile on component mount
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-      setIsMobile(mobile)
-      console.log("CTA Section - Device detection:", mobile ? "Mobile" : "Desktop")
-    }
-
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
-  }, [])
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Simplified form submission handler
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
-    // Create the submission data
-    const data = {
+    // Create form data
+    const formData = {
       name,
       email,
       company,
       properties,
-      source: "homepage",
       url: window.location.href,
-      submittedAt: new Date().toISOString(),
     }
 
     try {
-      // First save to Supabase with explicit device type
-      const deviceType = isMobile ? "mobile" : "desktop"
-      console.log(`CTA Section - Submitting as ${deviceType} device`)
+      // Use the unified handler
+      const success = await handleFormSubmission(formData, "homepage")
 
-      const savedLocally = await saveFormSubmission(data, deviceType)
-      console.log("Supabase save result:", savedLocally)
-
-      // Then submit to Zapier with the same device type
-      const zapierData = {
-        ...data,
-        device: deviceType,
-      }
-
-      try {
-        await submitToZapier(zapierData)
-      } catch (zapierError) {
-        console.error("Zapier submission error:", zapierError)
-        // Continue even if Zapier fails
-      }
-
-      // If save worked, consider it a success
-      if (savedLocally) {
+      if (success) {
+        // Redirect to the calendar page with the submitted parameter
         router.push("/calendar?submitted=true")
       } else {
         throw new Error("Failed to save submission")
@@ -102,9 +70,7 @@ export function CtaSection() {
             {error && (
               <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-4">{error}</div>
             )}
-            {/* Debug info - will show on the form */}
-            <div className="text-xs text-white/50 mb-4">Device detected: {isMobile ? "Mobile" : "Desktop"}</div>
-            <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4" onSubmit={onSubmit}>
               <div>
                 <label htmlFor="cta-name" className="block text-sm font-medium mb-1">
                   Full Name *

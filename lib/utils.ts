@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { supabase, type FormSubmission } from "./supabase"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -18,54 +17,18 @@ export function isMobileDevice() {
   return window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 }
 
-// Save form submission to Supabase
-export async function saveFormSubmission(data: any, deviceType: string) {
+// Unified form submission function
+export function saveFormSubmission(data: any) {
   try {
-    // Create submission with explicit device type
-    const submissionData: FormSubmission = {
-      name: data.name,
-      email: data.email,
-      company: data.company,
-      properties: data.properties,
-      source: data.source || "unknown",
-      device: deviceType,
-      status: "pending",
-      date: new Date().toISOString(),
-      notes: data.notes || "",
-      url: data.url || window.location.href,
-    }
-
-    console.log(`Saving submission with device type: ${deviceType}`, submissionData)
-
-    // Save to Supabase
-    const { data: savedData, error } = await supabase.from("form_submissions").insert(submissionData).select()
-
-    if (error) {
-      console.error("❌ Error saving to Supabase:", error)
-
-      // Fallback to localStorage if Supabase fails
-      saveToLocalStorage(submissionData)
-      return true // Return true anyway to not disrupt user experience
-    }
-
-    console.log("✅ Saved submission to Supabase:", savedData)
-    return true
-  } catch (err) {
-    console.error("❌ Error saving submission:", err)
-
-    // Fallback to localStorage
-    saveToLocalStorage(data)
-    return true // Return true anyway to not disrupt user experience
-  }
-}
-
-// Fallback function to save to localStorage
-function saveToLocalStorage(data: any) {
-  try {
-    // Add an ID if it doesn't have one
+    // Add basic metadata
     const submissionData = {
       ...data,
-      id: data.id || Date.now().toString(),
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      status: "pending",
+      notes: "",
+      // Simple device detection
+      device: data.device || getDeviceType(),
     }
 
     // Get existing submissions
@@ -88,9 +51,11 @@ function saveToLocalStorage(data: any) {
     const updatedSubmissions = [...existingSubmissions, submissionData]
     localStorage.setItem("formSubmissions", JSON.stringify(updatedSubmissions))
 
-    console.log("✅ Saved submission to localStorage as fallback:", submissionData)
+    console.log("✅ Saved submission to localStorage:", submissionData)
+    return true
   } catch (err) {
-    console.error("❌ Error saving to localStorage:", err)
+    console.error("❌ Error saving submission:", err)
+    return false
   }
 }
 
@@ -99,6 +64,7 @@ export async function submitToZapier(data: any) {
   try {
     console.log("📤 Submitting to Zapier:", data)
 
+    // Use a try-catch specifically for the fetch operation
     try {
       const response = await fetch("https://hooks.zapier.com/hooks/catch/22588169/2xewy7p/", {
         method: "POST",
@@ -135,8 +101,8 @@ export async function handleFormSubmission(formData: any, source: string) {
     submittedAt: new Date().toISOString(),
   }
 
-  // Save to Supabase first
-  const savedLocally = await saveFormSubmission(data, getDeviceType())
+  // Save to localStorage first
+  const savedLocally = saveFormSubmission(data)
 
   // Then try Zapier, but continue even if it fails
   try {

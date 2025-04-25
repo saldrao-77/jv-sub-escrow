@@ -7,7 +7,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { saveFormSubmission, submitToZapier } from "@/lib/utils"
+import { handleFormSubmission } from "@/lib/utils"
 
 export default function GetStartedPage() {
   const searchParams = useSearchParams()
@@ -17,7 +17,6 @@ export default function GetStartedPage() {
   const [properties, setProperties] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -27,58 +26,27 @@ export default function GetStartedPage() {
     }
   }, [searchParams])
 
-  // Check if device is mobile on component mount
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-      setIsMobile(mobile)
-      console.log("Get Started Page - Device detection:", mobile ? "Mobile" : "Desktop")
-    }
-
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
-  }, [])
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Simplified form submission handler
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
-    // Create the submission data
-    const data = {
+    // Create form data
+    const formData = {
       name,
       email,
       company,
       properties,
-      source: "get-started",
       url: window.location.href,
-      submittedAt: new Date().toISOString(),
     }
 
     try {
-      // First save to Supabase with explicit device type
-      const deviceType = isMobile ? "mobile" : "desktop"
-      console.log(`Get Started Page - Submitting as ${deviceType} device`)
+      // Use the unified handler
+      const success = await handleFormSubmission(formData, "get-started")
 
-      const savedLocally = await saveFormSubmission(data, deviceType)
-      console.log("Supabase save result:", savedLocally)
-
-      // Then submit to Zapier with the same device type
-      const zapierData = {
-        ...data,
-        device: deviceType,
-      }
-
-      try {
-        await submitToZapier(zapierData)
-      } catch (zapierError) {
-        console.error("Zapier submission error:", zapierError)
-        // Continue even if Zapier fails
-      }
-
-      // If save worked, consider it a success
-      if (savedLocally) {
+      if (success) {
+        // Redirect to the calendar page with the submitted parameter
         router.push("/calendar?submitted=true")
       } else {
         throw new Error("Failed to save submission")
@@ -102,9 +70,7 @@ export default function GetStartedPage() {
           {error && (
             <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-4">{error}</div>
           )}
-          {/* Debug info - will show on the form */}
-          <div className="text-xs text-white/50 mb-4">Device detected: {isMobile ? "Mobile" : "Desktop"}</div>
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium mb-1">
                 Full Name *

@@ -6,7 +6,6 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import Script from "next/script"
-import { DbInitializer } from "@/components/db-initializer"
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -22,12 +21,12 @@ const inter = Inter({
 
 // Update the metadata for better link previews
 export const metadata: Metadata = {
-  title: "JobVault for Contractors",
+  title: "JobVault for Specialty Trade Contractors",
   description:
     "Stop waiting on customer deposits or fronting your own cash for materials. JobVault's escrow system secures your funds upfront.",
   metadataBase: new URL("https://jobvault-contractors.vercel.app"),
   openGraph: {
-    title: "JobVault for Contractors",
+    title: "JobVault for Specialty Trade Contractors",
     description: "Stop waiting on customer deposits or fronting your own cash for materials.",
     url: "https://jobvault-contractors.vercel.app",
     siteName: "JobVault",
@@ -44,7 +43,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "JobVault for Contractors",
+    title: "JobVault for Specialty Trade Contractors",
     description: "Stop waiting on customer deposits or fronting your own cash for materials.",
     creator: "@jobvault",
     site: "@jobvault",
@@ -83,7 +82,7 @@ export default function RootLayout({
         />
 
         {/* Force meta tags for better link previews */}
-        <meta property="og:title" content="JobVault for Contractors" />
+        <meta property="og:title" content="JobVault for Specialty Trade Contractors" />
         <meta
           property="og:description"
           content="Stop waiting on customer deposits or fronting your own cash for materials."
@@ -99,7 +98,7 @@ export default function RootLayout({
         <meta property="og:site_name" content="JobVault" />
 
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="JobVault | Get paid upfront for every job" />
+        <meta name="twitter:title" content="JobVault for Specialty Trade Contractors" />
         <meta
           name="twitter:description"
           content="Stop waiting on customer deposits or fronting your own cash for materials."
@@ -123,7 +122,6 @@ export default function RootLayout({
         />
       </head>
       <body className={`${spaceGrotesk.variable} ${inter.variable}`}>
-        <DbInitializer />
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
           <Navbar />
           {children}

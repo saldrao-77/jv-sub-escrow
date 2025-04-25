@@ -1,21 +1,33 @@
 "use client"
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { ContactButtons } from "@/components/contact-buttons"
+import { Button } from "@/components/ui/button"
+import { Phone, MessageSquare } from "lucide-react"
 
 export default function FAQPage() {
   return (
     <main className="min-h-screen bg-black text-white pt-32 pb-20">
       <div className="container mx-auto px-4">
         <h1 className="text-4xl md:text-5xl font-bold text-center mb-8 font-heading">FREQUENTLY ASKED QUESTIONS</h1>
-        <p className="text-center text-white/70 mb-16 max-w-2xl mx-auto">
+        <p className="text-center text-white/70 mb-8 max-w-2xl mx-auto">
           Everything you need to know about JobVault's escrow system and how it can transform your payment process and
           cash flow.
         </p>
 
-        {/* Add Contact Buttons */}
-        <div className="flex justify-center -mt-8 mb-12">
-          <ContactButtons />
+        {/* Call and Text buttons */}
+        <div className="flex flex-wrap justify-center gap-4 mb-16">
+          <a href="tel:2625018982" className="inline-flex">
+            <Button variant="outline" className="bg-white/10 border-0 hover:bg-white/20 rounded-full px-6 gap-2">
+              <Phone className="h-4 w-4 text-blue-400" />
+              Call Us
+            </Button>
+          </a>
+          <a href="sms:2625018982" className="inline-flex">
+            <Button variant="outline" className="bg-white/10 border-0 hover:bg-white/20 rounded-full px-6 gap-2">
+              <MessageSquare className="h-4 w-4 text-blue-400" />
+              Text Us
+            </Button>
+          </a>
         </div>
 
         <div className="max-w-3xl mx-auto">
