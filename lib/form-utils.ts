@@ -1,4 +1,14 @@
-// Utility functions for form handling
+// Simplified utility functions for form handling
+
+// Get device type
+export function getDeviceType() {
+  if (typeof window === "undefined") {
+    return "desktop"
+  }
+
+  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(window.navigator.userAgent.toLowerCase())
+  return isMobile ? "mobile" : "desktop"
+}
 
 // Extract UTM parameters from URL
 export function getUtmParams() {
@@ -27,16 +37,6 @@ export function isFromHeroForm() {
 
   const urlParams = new URLSearchParams(window.location.search)
   return urlParams.get("from") === "hero"
-}
-
-// Get device type
-export function getDeviceType() {
-  if (typeof window === "undefined") {
-    return "desktop"
-  }
-
-  const isMobile = /mobile|android|iphone|ipad|ipod/i.test(window.navigator.userAgent.toLowerCase())
-  return isMobile ? "mobile" : "desktop"
 }
 
 // Store hero submission in session storage

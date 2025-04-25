@@ -7,7 +7,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { getUtmParams, storeLastSubmission, getDeviceType } from "@/lib/form-utils"
+import { storeLastSubmission, getDeviceType } from "@/lib/form-utils"
 
 export function CtaSection() {
   const [email, setEmail] = useState("")
@@ -24,14 +24,7 @@ export function CtaSection() {
     setError(null)
 
     try {
-      // Get client IP address (this will be replaced by the server)
-      const ipResponse = await fetch("https://api.ipify.org?format=json")
-      const ipData = await ipResponse.json()
-
-      // Get UTM parameters
-      const utmParams = getUtmParams()
-
-      // Create the submission data
+      // Simplified data collection
       const formData = {
         name,
         email,
@@ -39,37 +32,29 @@ export function CtaSection() {
         properties,
         source: "homepage",
         submittedAt: new Date().toISOString(),
-        url: window.location.href,
-        userAgent: window.navigator.userAgent,
-        ip: ipData.ip,
-        utmSource: utmParams.utmSource,
-        utmMedium: utmParams.utmMedium,
-        utmCampaign: utmParams.utmCampaign,
         deviceType: getDeviceType(),
       }
 
-      // Send to our API route
-      const response = await fetch("/api/webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to submit form")
-      }
-
-      // Store submission in sessionStorage to check on calendar page
+      // Store submission in sessionStorage
       storeLastSubmission(formData)
 
-      // Redirect to the calendar page with the submitted parameter
+      // Send to API with minimal error handling
+      try {
+        await fetch("/api/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        })
+      } catch (error) {
+        console.error("API error:", error)
+        // Continue even if API fails
+      }
+
+      // Redirect to the calendar page
       router.push("/calendar?submitted=true")
     } catch (error) {
-      console.error("Error processing submission:", error)
+      console.error("Error:", error)
       setError("There was a problem submitting the form. Please try again.")
-      // Still redirect even if notification fails
       router.push("/calendar?submitted=true")
     } finally {
       setIsSubmitting(false)

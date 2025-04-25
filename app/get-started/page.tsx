@@ -7,14 +7,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import {
-  getUtmParams,
-  isFromHeroForm,
-  getHeroSubmission,
-  storeLastSubmission,
-  clearHeroSubmission,
-  getDeviceType,
-} from "@/lib/form-utils"
+import { isFromHeroForm, storeLastSubmission, clearHeroSubmission, getDeviceType } from "@/lib/form-utils"
 
 export default function GetStartedPage() {
   const searchParams = useSearchParams()
@@ -39,20 +32,7 @@ export default function GetStartedPage() {
     setError(null)
 
     try {
-      // Get client IP address (this will be replaced by the server)
-      const ipResponse = await fetch("https://api.ipify.org?format=json")
-      const ipData = await ipResponse.json()
-
-      // Get UTM parameters
-      const utmParams = getUtmParams()
-
-      // Check if user came from hero form
-      const fromHero = isFromHeroForm()
-
-      // Get hero submission data if available
-      const heroData = getHeroSubmission()
-
-      // Create the submission data
+      // Simplified data collection
       const formData = {
         name,
         email,
@@ -60,42 +40,33 @@ export default function GetStartedPage() {
         properties,
         source: "get-started",
         submittedAt: new Date().toISOString(),
-        url: window.location.href,
-        userAgent: window.navigator.userAgent,
-        ip: ipData.ip,
-        utmSource: utmParams.utmSource,
-        utmMedium: utmParams.utmMedium,
-        utmCampaign: utmParams.utmCampaign,
         deviceType: getDeviceType(),
-        isFromHero: fromHero || !!heroData,
-        heroSubmissionTime: heroData?.timestamp ? new Date(heroData.timestamp).toISOString() : null,
+        isFromHero: isFromHeroForm(),
       }
 
-      // Send to our API route
-      const response = await fetch("/api/webhook", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to submit form")
-      }
-
-      // Store submission in sessionStorage to check on calendar page
+      // Store submission in sessionStorage
       storeLastSubmission(formData)
+
+      // Send to API with minimal error handling
+      try {
+        await fetch("/api/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        })
+      } catch (error) {
+        console.error("API error:", error)
+        // Continue even if API fails
+      }
 
       // Clear hero submission data after successful get-started submission
       clearHeroSubmission()
 
-      // Redirect to the calendar page with the submitted parameter
+      // Redirect to the calendar page
       router.push("/calendar?submitted=true")
     } catch (error) {
-      console.error("Error processing submission:", error)
+      console.error("Error:", error)
       setError("There was a problem submitting the form. Please try again.")
-      // Still redirect even if notification fails
       router.push("/calendar?submitted=true")
     } finally {
       setIsSubmitting(false)

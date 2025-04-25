@@ -8,7 +8,7 @@ import { Shield, CheckCircle, Clock, Phone, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { getUtmParams, storeHeroSubmission, getDeviceType } from "@/lib/form-utils"
+import { storeHeroSubmission, getDeviceType } from "@/lib/form-utils"
 
 export function HeroSection() {
   const [email, setEmail] = useState("")
@@ -21,7 +21,6 @@ export function HeroSection() {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       setIsMobile(mobile)
-      console.log("Device detection:", mobile ? "Mobile" : "Desktop")
     }
 
     checkMobile()
@@ -35,48 +34,33 @@ export function HeroSection() {
       setIsSubmitting(true)
 
       try {
-        // Get client IP address (this will be replaced by the server)
-        const ipResponse = await fetch("https://api.ipify.org?format=json")
-        const ipData = await ipResponse.json()
-
-        // Get UTM parameters
-        const utmParams = getUtmParams()
-
-        // Create the submission data
+        // Simplified data collection
         const formData = {
           email,
           source: "hero",
           submittedAt: new Date().toISOString(),
-          url: window.location.href,
-          userAgent: window.navigator.userAgent,
-          ip: ipData.ip,
-          utmSource: utmParams.utmSource,
-          utmMedium: utmParams.utmMedium,
-          utmCampaign: utmParams.utmCampaign,
           deviceType: getDeviceType(),
-        }
-
-        // Send to our API route
-        const response = await fetch("/api/webhook", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formData),
-        })
-
-        if (!response.ok) {
-          throw new Error("Failed to submit form")
         }
 
         // Store the hero submission in sessionStorage to track the journey
         storeHeroSubmission(formData)
 
-        // Redirect to get-started page with email prefilled and source tracking
+        // Send to API with minimal error handling
+        try {
+          await fetch("/api/webhook", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(formData),
+          })
+        } catch (error) {
+          console.error("API error:", error)
+          // Continue even if API fails
+        }
+
+        // Redirect to get-started page with email prefilled
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
       } catch (error) {
-        console.error("Error sending to API:", error)
-        // Still redirect even if API call fails
+        console.error("Error:", error)
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
       } finally {
         setIsSubmitting(false)
