@@ -1,23 +1,29 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { RefreshCw, Download, Search, ArrowUpDown, Trash2, Save, X, Edit2, Smartphone, Monitor } from "lucide-react"
+import { RefreshCw, Download, Search, ArrowUpDown, Save, X, Edit2, Trash2, Smartphone, Monitor } from "lucide-react"
+import { createClientSupabaseClient } from "@/lib/supabase"
 
 // Define the submission type
 type Submission = {
-  id: string
+  id: string | number
   name: string
   email: string
   company: string
   properties: string
   status: "pending" | "processed"
-  date: string
-  source: string
+  submitted_at: string
+  form_source: string
   notes: string
-  device?: string
+  device_type?: string
   isNew?: boolean
+  url?: string
+  user_agent?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
 }
 
 export default function AdminPage() {
@@ -31,177 +37,69 @@ export default function AdminPage() {
   const [endDate, setEndDate] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-  const [editingNotes, setEditingNotes] = useState<string | null>(null)
+  const [editingNotes, setEditingNotes] = useState<string | number | null>(null)
   const [notesText, setNotesText] = useState("")
   const [newSubmissionsCount, setNewSubmissionsCount] = useState(0)
-  const notesTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const lastSubmissionCountRef = useRef(0)
+  const [lastFetchTime, setLastFetchTime] = useState(Date.now())
+  const [error, setError] = useState<string | null>(null)
 
-  // Load submissions from localStorage
-  useEffect(() => {
+  // Load submissions from Supabase
+  const fetchSubmissions = async () => {
     setIsLoading(true)
+    setError(null)
 
-    // In a real app, this would be an API call
-    // For demo purposes, we'll use localStorage and mock data
-    setTimeout(() => {
-      try {
-        const storedSubmissions = localStorage.getItem("formSubmissions")
-        console.log("Retrieved from localStorage:", storedSubmissions)
+    try {
+      const supabase = createClientSupabaseClient()
 
-        if (storedSubmissions) {
-          const parsedSubmissions = JSON.parse(storedSubmissions)
-          console.log("Parsed submissions:", parsedSubmissions)
+      // Fetch submissions from Supabase
+      const { data, error } = await supabase.from("jv_sub_e").select("*").order("submitted_at", { ascending: false })
 
-          // No complex processing needed - just use the data as is
-          setSubmissions(parsedSubmissions)
-          setFilteredSubmissions(parsedSubmissions)
-
-          // Check for new submissions
-          if (lastSubmissionCountRef.current > 0 && parsedSubmissions.length > lastSubmissionCountRef.current) {
-            setNewSubmissionsCount(parsedSubmissions.length - lastSubmissionCountRef.current)
-
-            // Mark new submissions
-            const updatedSubmissions = parsedSubmissions.map((sub: Submission, index: number) => {
-              if (index >= lastSubmissionCountRef.current) {
-                return { ...sub, isNew: true }
-              }
-              return sub
-            })
-
-            setSubmissions(updatedSubmissions)
-            setFilteredSubmissions(updatedSubmissions)
-          }
-
-          lastSubmissionCountRef.current = parsedSubmissions.length
-        } else {
-          // Mock data if no submissions exist
-          const mockSubmissions: Submission[] = [
-            {
-              id: "1",
-              name: "John Smith",
-              email: "john@example.com",
-              company: "ABC Property Management",
-              properties: "11-50",
-              status: "processed",
-              date: "2023-04-15T10:30:00",
-              source: "get-started",
-              notes: "Interested in Pro plan. Follow up next week.",
-              device: "desktop",
-            },
-            {
-              id: "2",
-              name: "Sarah Johnson",
-              email: "sarah@realestate.com",
-              company: "Johnson Properties",
-              properties: "1-10",
-              status: "pending",
-              date: "2023-04-16T14:45:00",
-              source: "homepage",
-              notes: "",
-              device: "mobile",
-            },
-            {
-              id: "3",
-              name: "Michael Brown",
-              email: "michael@brownpm.com",
-              company: "Brown Property Management",
-              properties: "51-200",
-              status: "pending",
-              date: "2023-04-14T09:15:00",
-              source: "pricing",
-              notes: "Requested pricing information for Enterprise plan.",
-              device: "desktop",
-            },
-            {
-              id: "4",
-              name: "Jessica Davis",
-              email: "jessica@davisproperties.com",
-              company: "Davis Properties LLC",
-              properties: "11-50",
-              status: "processed",
-              date: "2023-04-13T16:20:00",
-              source: "get-started",
-              notes: "Demo scheduled for next Tuesday at 2pm.",
-              device: "mobile",
-            },
-            {
-              id: "5",
-              name: "Robert Wilson",
-              email: "robert@wilsonpm.com",
-              company: "Wilson PM Group",
-              properties: "200+",
-              status: "pending",
-              date: "2023-04-17T11:10:00",
-              source: "homepage",
-              notes: "",
-              device: "desktop",
-            },
-          ]
-
-          setSubmissions(mockSubmissions)
-          setFilteredSubmissions(mockSubmissions)
-          localStorage.setItem("formSubmissions", JSON.stringify(mockSubmissions))
-          lastSubmissionCountRef.current = mockSubmissions.length
-        }
-      } catch (error) {
-        console.error("Error loading submissions:", error)
-        // Fallback to empty array
-        setSubmissions([])
-        setFilteredSubmissions([])
+      if (error) {
+        throw error
       }
 
-      setIsLoading(false)
-    }, 1000)
-  }, [])
+      if (data) {
+        // Check for new submissions
+        if (submissions.length > 0 && data.length > submissions.length) {
+          setNewSubmissionsCount(data.length - submissions.length)
 
-  // Set up polling for new submissions
-  useEffect(() => {
-    const checkForNewSubmissions = () => {
-      try {
-        const storedSubmissions = localStorage.getItem("formSubmissions")
-        if (storedSubmissions) {
-          const parsedSubmissions = JSON.parse(storedSubmissions)
-
-          if (parsedSubmissions.length > lastSubmissionCountRef.current) {
-            setNewSubmissionsCount(parsedSubmissions.length - lastSubmissionCountRef.current)
-
-            // Play notification sound
-            const audio = new Audio("/notification.mp3")
-            audio.play().catch((e) => console.log("Audio play failed:", e))
-
-            // Show browser notification if supported
-            if ("Notification" in window && Notification.permission === "granted") {
-              new Notification("New Form Submission", {
-                body: "You have received a new form submission on JobVault.",
-                icon: "/favicon.ico",
-              })
+          // Mark new submissions
+          const updatedSubmissions = data.map((sub: Submission, index: number) => {
+            if (new Date(sub.submitted_at).getTime() > lastFetchTime) {
+              return { ...sub, isNew: true }
             }
+            return sub
+          })
 
-            // Mark new submissions
-            const updatedSubmissions = parsedSubmissions.map((sub: Submission, index: number) => {
-              if (index >= lastSubmissionCountRef.current) {
-                return { ...sub, isNew: true }
-              }
-              return sub
-            })
-
-            setSubmissions(updatedSubmissions)
-            setFilteredSubmissions(updatedSubmissions)
-            lastSubmissionCountRef.current = parsedSubmissions.length
-          }
+          setSubmissions(updatedSubmissions)
+          setFilteredSubmissions(updatedSubmissions)
+        } else {
+          setSubmissions(data)
+          setFilteredSubmissions(data)
         }
-      } catch (error) {
-        console.error("Error checking for new submissions:", error)
+
+        setLastFetchTime(Date.now())
       }
-    }
+    } catch (error) {
+      console.error("Error loading submissions:", error)
+      setError("Failed to load submissions. Please try again.")
 
-    // Check every 30 seconds
-    const interval = setInterval(checkForNewSubmissions, 30000)
-
-    // Request notification permission
-    if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-      Notification.requestPermission()
+      // Fallback to empty array
+      setSubmissions([])
+      setFilteredSubmissions([])
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  // Initial load
+  useEffect(() => {
+    fetchSubmissions()
+
+    // Set up polling for new submissions every 30 seconds
+    const interval = setInterval(() => {
+      fetchSubmissions()
+    }, 30000)
 
     return () => clearInterval(interval)
   }, [])
@@ -214,9 +112,9 @@ export default function AdminPage() {
     if (searchTerm) {
       filtered = filtered.filter(
         (sub) =>
-          sub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sub.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          sub.company.toLowerCase().includes(searchTerm.toLowerCase()),
+          (sub.name && sub.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sub.email && sub.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (sub.company && sub.company.toLowerCase().includes(searchTerm.toLowerCase())),
       )
     }
 
@@ -227,16 +125,16 @@ export default function AdminPage() {
 
     // Filter by source
     if (sourceFilter !== "all") {
-      filtered = filtered.filter((sub) => sub.source === sourceFilter)
+      filtered = filtered.filter((sub) => sub.form_source === sourceFilter)
     }
 
     // Filter by device
     if (deviceFilter !== "all") {
       filtered = filtered.filter((sub) => {
         if (deviceFilter === "mobile") {
-          return sub.device === "mobile"
+          return sub.device_type === "mobile"
         } else if (deviceFilter === "desktop") {
-          return sub.device === "desktop"
+          return sub.device_type === "desktop"
         }
         return true
       })
@@ -244,80 +142,62 @@ export default function AdminPage() {
 
     // Filter by date range
     if (startDate) {
-      filtered = filtered.filter((sub) => new Date(sub.date) >= new Date(startDate))
+      filtered = filtered.filter((sub) => new Date(sub.submitted_at) >= new Date(startDate))
     }
 
     if (endDate) {
-      filtered = filtered.filter((sub) => new Date(sub.date) <= new Date(endDate + "T23:59:59"))
+      filtered = filtered.filter((sub) => new Date(sub.submitted_at) <= new Date(endDate + "T23:59:59"))
     }
 
     // Sort by date
     filtered.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
+      const dateA = new Date(a.submitted_at).getTime()
+      const dateB = new Date(b.submitted_at).getTime()
       return sortOrder === "desc" ? dateB - dateA : dateA - dateB
     })
 
     setFilteredSubmissions(filtered)
   }, [submissions, searchTerm, statusFilter, sourceFilter, deviceFilter, startDate, endDate, sortOrder])
 
-  // Focus textarea when editing notes
-  useEffect(() => {
-    if (editingNotes && notesTextareaRef.current) {
-      notesTextareaRef.current.focus()
-    }
-  }, [editingNotes])
-
-  // Count submissions by status and device
-  const totalCount = submissions.length
-  const pendingCount = submissions.filter((sub) => sub.status === "pending").length
-  const processedCount = submissions.filter((sub) => sub.status === "processed").length
-  const mobileCount = submissions.filter((sub) => sub.device === "mobile").length
-  const desktopCount = submissions.filter((sub) => sub.device === "desktop").length
-
   // Handle refresh
   const handleRefresh = () => {
-    setIsLoading(true)
-    setTimeout(() => {
-      try {
-        const storedSubmissions = localStorage.getItem("formSubmissions")
-        if (storedSubmissions) {
-          const parsedSubmissions = JSON.parse(storedSubmissions)
-          setSubmissions(parsedSubmissions)
-          setFilteredSubmissions(parsedSubmissions)
-          setNewSubmissionsCount(0)
-
-          // Clear "new" flags
-          const updatedSubmissions = parsedSubmissions.map((sub: Submission) => ({
-            ...sub,
-            isNew: false,
-          }))
-
-          setSubmissions(updatedSubmissions)
-          setFilteredSubmissions(updatedSubmissions)
-          localStorage.setItem("formSubmissions", JSON.stringify(updatedSubmissions))
-        }
-      } catch (error) {
-        console.error("Error refreshing submissions:", error)
-      }
-      setIsLoading(false)
-    }, 1000)
+    fetchSubmissions()
+    setNewSubmissionsCount(0)
   }
 
   // Handle export to CSV
   const handleExportCSV = () => {
-    const headers = ["ID", "Name", "Email", "Company", "Properties", "Status", "Date", "Source", "Device", "Notes"]
+    const headers = [
+      "ID",
+      "Name",
+      "Email",
+      "Company",
+      "Properties",
+      "Status",
+      "Date",
+      "Source",
+      "Device",
+      "Notes",
+      "URL",
+      "UTM Source",
+      "UTM Medium",
+      "UTM Campaign",
+    ]
     const csvData = filteredSubmissions.map((sub) => [
       sub.id,
-      sub.name,
-      sub.email,
-      sub.company,
-      sub.properties,
-      sub.status,
-      new Date(sub.date).toLocaleString(),
-      sub.source,
-      sub.device || "unknown",
-      sub.notes,
+      sub.name || "",
+      sub.email || "",
+      sub.company || "",
+      sub.properties || "",
+      sub.status || "",
+      new Date(sub.submitted_at).toLocaleString(),
+      sub.form_source || "",
+      sub.device_type || "unknown",
+      sub.notes || "",
+      sub.url || "",
+      sub.utm_source || "",
+      sub.utm_medium || "",
+      sub.utm_campaign || "",
     ])
 
     const csvContent = [headers.join(","), ...csvData.map((row) => row.join(","))].join("\n")
@@ -339,33 +219,77 @@ export default function AdminPage() {
   }
 
   // Handle status change
-  const handleStatusChange = (id: string, newStatus: "pending" | "processed") => {
-    const updatedSubmissions = submissions.map((sub) => (sub.id === id ? { ...sub, status: newStatus } : sub))
-    setSubmissions(updatedSubmissions)
-    localStorage.setItem("formSubmissions", JSON.stringify(updatedSubmissions))
+  const handleStatusChange = async (id: string | number, newStatus: "pending" | "processed") => {
+    try {
+      const supabase = createClientSupabaseClient()
+
+      // Update status in Supabase
+      const { error } = await supabase.from("jv_sub_e").update({ status: newStatus }).eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Update local state
+      const updatedSubmissions = submissions.map((sub) => (sub.id === id ? { ...sub, status: newStatus } : sub))
+
+      setSubmissions(updatedSubmissions)
+    } catch (error) {
+      console.error("Error updating status:", error)
+      alert("Failed to update status. Please try again.")
+    }
   }
 
   // Handle delete submission
-  const handleDeleteSubmission = (id: string) => {
+  const handleDeleteSubmission = async (id: string | number) => {
     if (window.confirm("Are you sure you want to delete this submission?")) {
-      const updatedSubmissions = submissions.filter((sub) => sub.id !== id)
-      setSubmissions(updatedSubmissions)
-      localStorage.setItem("formSubmissions", JSON.stringify(updatedSubmissions))
+      try {
+        const supabase = createClientSupabaseClient()
+
+        // Delete from Supabase
+        const { error } = await supabase.from("jv_sub_e").delete().eq("id", id)
+
+        if (error) {
+          throw error
+        }
+
+        // Update local state
+        const updatedSubmissions = submissions.filter((sub) => sub.id !== id)
+        setSubmissions(updatedSubmissions)
+      } catch (error) {
+        console.error("Error deleting submission:", error)
+        alert("Failed to delete submission. Please try again.")
+      }
     }
   }
 
   // Start editing notes
-  const startEditingNotes = (id: string, currentNotes: string) => {
+  const startEditingNotes = (id: string | number, currentNotes: string) => {
     setEditingNotes(id)
-    setNotesText(currentNotes)
+    setNotesText(currentNotes || "")
   }
 
   // Save notes
-  const saveNotes = (id: string) => {
-    const updatedSubmissions = submissions.map((sub) => (sub.id === id ? { ...sub, notes: notesText } : sub))
-    setSubmissions(updatedSubmissions)
-    localStorage.setItem("formSubmissions", JSON.stringify(updatedSubmissions))
-    setEditingNotes(null)
+  const saveNotes = async (id: string | number) => {
+    try {
+      const supabase = createClientSupabaseClient()
+
+      // Update notes in Supabase
+      const { error } = await supabase.from("jv_sub_e").update({ notes: notesText }).eq("id", id)
+
+      if (error) {
+        throw error
+      }
+
+      // Update local state
+      const updatedSubmissions = submissions.map((sub) => (sub.id === id ? { ...sub, notes: notesText } : sub))
+
+      setSubmissions(updatedSubmissions)
+      setEditingNotes(null)
+    } catch (error) {
+      console.error("Error updating notes:", error)
+      alert("Failed to update notes. Please try again.")
+    }
   }
 
   // Cancel editing notes
@@ -374,29 +298,12 @@ export default function AdminPage() {
     setNotesText("")
   }
 
-  // Debug function to log all submissions
-  const debugSubmissions = () => {
-    console.log("All submissions:", submissions)
-    console.log(
-      "Mobile submissions:",
-      submissions.filter((sub) => sub.device === "mobile"),
-    )
-    console.log(
-      "Desktop submissions:",
-      submissions.filter((sub) => sub.device === "desktop"),
-    )
-
-    // Check localStorage directly
-    try {
-      const storedData = localStorage.getItem("formSubmissions")
-      if (storedData) {
-        const parsed = JSON.parse(storedData)
-        console.log("Raw localStorage data:", parsed)
-      }
-    } catch (e) {
-      console.error("Error parsing localStorage:", e)
-    }
-  }
+  // Count submissions by status and device
+  const totalCount = submissions.length
+  const pendingCount = submissions.filter((sub) => sub.status === "pending").length
+  const processedCount = submissions.filter((sub) => sub.status === "processed").length
+  const mobileCount = submissions.filter((sub) => sub.device_type === "mobile").length
+  const desktopCount = submissions.filter((sub) => sub.device_type === "desktop").length
 
   return (
     <main className="min-h-screen bg-black text-white pt-32 pb-20">
@@ -420,11 +327,12 @@ export default function AdminPage() {
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Button variant="outline" className="flex items-center gap-2" onClick={debugSubmissions}>
-              Debug
-            </Button>
           </div>
         </div>
+
+        {error && (
+          <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-6">{error}</div>
+        )}
 
         <div className="bg-zinc-900 rounded-lg p-4 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -472,9 +380,9 @@ export default function AdminPage() {
                 onChange={(e) => setSourceFilter(e.target.value)}
               >
                 <option value="all">All Sources</option>
-                <option value="homepage">Homepage</option>
+                <option value="hero">Hero</option>
                 <option value="get-started">Get Started</option>
-                <option value="pricing">Pricing</option>
+                <option value="homepage">Homepage</option>
               </select>
             </div>
 
@@ -607,10 +515,10 @@ export default function AdminPage() {
                       key={submission.id}
                       className={`hover:bg-zinc-800/50 ${submission.isNew ? "bg-blue-900/20" : ""}`}
                     >
-                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.name}</td>
-                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.email}</td>
-                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.company}</td>
-                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.properties}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.name || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.email || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.company || "—"}</td>
+                      <td className="px-3 py-2 text-sm whitespace-nowrap">{submission.properties || "—"}</td>
                       <td className="px-3 py-2 text-sm whitespace-nowrap">
                         <select
                           className="bg-zinc-800 border-zinc-700 rounded p-1 text-xs w-24"
@@ -622,21 +530,24 @@ export default function AdminPage() {
                         </select>
                       </td>
                       <td className="px-3 py-2 text-sm whitespace-nowrap">
-                        {new Date(submission.date).toLocaleDateString() +
+                        {new Date(submission.submitted_at).toLocaleDateString() +
                           " " +
-                          new Date(submission.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          new Date(submission.submitted_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                       </td>
                       <td className="px-3 py-2 text-sm whitespace-nowrap">
                         <span className="px-1.5 py-0.5 text-xs rounded-full bg-blue-900/20 text-blue-400">
-                          {submission.source}
+                          {submission.form_source}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-sm whitespace-nowrap">
-                        {submission.device === "mobile" ? (
+                        {submission.device_type === "mobile" ? (
                           <span className="flex items-center gap-1 text-blue-400">
                             <Smartphone className="h-3 w-3" /> Mobile
                           </span>
-                        ) : submission.device === "desktop" ? (
+                        ) : submission.device_type === "desktop" ? (
                           <span className="flex items-center gap-1 text-purple-400">
                             <Monitor className="h-3 w-3" /> Desktop
                           </span>
@@ -648,7 +559,6 @@ export default function AdminPage() {
                         {editingNotes === submission.id ? (
                           <div className="flex flex-col gap-2">
                             <textarea
-                              ref={notesTextareaRef}
                               className="w-full h-16 bg-zinc-800 border-zinc-700 rounded p-1 text-xs"
                               value={notesText}
                               onChange={(e) => setNotesText(e.target.value)}
@@ -683,22 +593,24 @@ export default function AdminPage() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="ml-2"
+                              className="h-6 w-6 p-0"
                               onClick={() => startEditingNotes(submission.id, submission.notes)}
                             >
                               <Edit2 className="h-3 w-3" />
+                              <span className="sr-only">Edit Notes</span>
                             </Button>
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-sm whitespace-nowrap">
+                      <td className="px-3 py-2 text-sm">
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-900/20"
                           onClick={() => handleDeleteSubmission(submission.id)}
                         >
                           <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
                         </Button>
                       </td>
                     </tr>

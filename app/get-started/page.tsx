@@ -7,7 +7,14 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { handleFormSubmission } from "@/lib/utils"
+import {
+  getUtmParams,
+  isFromHeroForm,
+  getHeroSubmission,
+  storeLastSubmission,
+  clearHeroSubmission,
+  getDeviceType,
+} from "@/lib/form-utils"
 
 export default function GetStartedPage() {
   const searchParams = useSearchParams()
@@ -26,34 +33,71 @@ export default function GetStartedPage() {
     }
   }, [searchParams])
 
-  // Simplified form submission handler
-  const onSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
 
-    // Create form data
-    const formData = {
-      name,
-      email,
-      company,
-      properties,
-      url: window.location.href,
-    }
-
     try {
-      // Use the unified handler
-      const success = await handleFormSubmission(formData, "get-started")
+      // Get client IP address (this will be replaced by the server)
+      const ipResponse = await fetch("https://api.ipify.org?format=json")
+      const ipData = await ipResponse.json()
 
-      if (success) {
-        // Redirect to the calendar page with the submitted parameter
-        router.push("/calendar?submitted=true")
-      } else {
-        throw new Error("Failed to save submission")
+      // Get UTM parameters
+      const utmParams = getUtmParams()
+
+      // Check if user came from hero form
+      const fromHero = isFromHeroForm()
+
+      // Get hero submission data if available
+      const heroData = getHeroSubmission()
+
+      // Create the submission data
+      const formData = {
+        name,
+        email,
+        company,
+        properties,
+        source: "get-started",
+        submittedAt: new Date().toISOString(),
+        url: window.location.href,
+        userAgent: window.navigator.userAgent,
+        ip: ipData.ip,
+        utmSource: utmParams.utmSource,
+        utmMedium: utmParams.utmMedium,
+        utmCampaign: utmParams.utmCampaign,
+        deviceType: getDeviceType(),
+        isFromHero: fromHero || !!heroData,
+        heroSubmissionTime: heroData?.timestamp ? new Date(heroData.timestamp).toISOString() : null,
       }
+
+      // Send to our API route
+      const response = await fetch("/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to submit form")
+      }
+
+      // Store submission in sessionStorage to check on calendar page
+      storeLastSubmission(formData)
+
+      // Clear hero submission data after successful get-started submission
+      clearHeroSubmission()
+
+      // Redirect to the calendar page with the submitted parameter
+      router.push("/calendar?submitted=true")
     } catch (error) {
-      console.error("Submission error:", error)
+      console.error("Error processing submission:", error)
       setError("There was a problem submitting the form. Please try again.")
+      // Still redirect even if notification fails
+      router.push("/calendar?submitted=true")
+    } finally {
       setIsSubmitting(false)
     }
   }
@@ -70,7 +114,7 @@ export default function GetStartedPage() {
           {error && (
             <div className="bg-red-900/20 border border-red-800 text-red-100 px-4 py-3 rounded mb-4">{error}</div>
           )}
-          <form className="space-y-4" onSubmit={onSubmit}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium mb-1">
                 Full Name *
@@ -82,6 +126,7 @@ export default function GetStartedPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -97,6 +142,7 @@ export default function GetStartedPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -111,6 +157,7 @@ export default function GetStartedPage() {
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -124,6 +171,7 @@ export default function GetStartedPage() {
                 value={properties}
                 onChange={(e) => setProperties(e.target.value)}
                 required
+                disabled={isSubmitting}
               >
                 <option value="">Select an option</option>
                 <option value="1-5">1-5 jobs</option>

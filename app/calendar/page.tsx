@@ -10,13 +10,63 @@ export default function CalendarPage() {
   const searchParams = useSearchParams()
   const [showThankYou, setShowThankYou] = useState(false)
   const [isCalendlyLoading, setIsCalendlyLoading] = useState(true)
+  const [zapierTriggered, setZapierTriggered] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   useEffect(() => {
     // Check if the URL has the submitted parameter
     const isSubmitted = searchParams.get("submitted") === "true"
     setShowThankYou(isSubmitted)
-  }, [searchParams])
+
+    // Trigger API webhook for calendar page visits with submitted=true
+    if (isSubmitted && !zapierTriggered) {
+      const triggerWebhook = async () => {
+        try {
+          // Check if we have a recent submission in sessionStorage
+          let submissionData = {}
+
+          if (typeof window !== "undefined") {
+            try {
+              const lastSubmission = sessionStorage.getItem("lastSubmission")
+              if (lastSubmission) {
+                const parsedSubmission = JSON.parse(lastSubmission)
+                // Only use if it's recent (within last 5 minutes)
+                if (Date.now() - parsedSubmission.timestamp < 5 * 60 * 1000) {
+                  submissionData = parsedSubmission
+                }
+              }
+            } catch (e) {
+              console.error("Error parsing last submission:", e)
+            }
+          }
+
+          // Prepare data for the webhook
+          const data = {
+            event: "calendar_visit",
+            submittedAt: new Date().toISOString(),
+            url: window.location.href,
+            userAgent: window.navigator.userAgent,
+            ...submissionData,
+          }
+
+          // Send to our API route
+          await fetch("/api/webhook", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+          })
+
+          setZapierTriggered(true)
+        } catch (error) {
+          console.error("Error triggering webhook:", error)
+        }
+      }
+
+      triggerWebhook()
+    }
+  }, [searchParams, zapierTriggered])
 
   const handleClosePopup = () => {
     // Simply hide the popup
