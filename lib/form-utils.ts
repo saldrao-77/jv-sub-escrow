@@ -1,4 +1,4 @@
-// Simplified utility functions for form handling
+// Form submission utilities
 
 // Get device type
 export function getDeviceType() {
@@ -105,5 +105,25 @@ export function clearHeroSubmission() {
     sessionStorage.removeItem("heroSubmission")
   } catch (error) {
     console.error("Error clearing hero submission:", error)
+  }
+}
+
+// Submit form data to API endpoint
+export async function submitFormData(formData: any) {
+  try {
+    const response = await fetch("/api/webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(formData),
+    })
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Form submission error:", error)
+    throw error
   }
 }

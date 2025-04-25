@@ -7,7 +7,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { isFromHeroForm, storeLastSubmission, clearHeroSubmission, getDeviceType } from "@/lib/form-utils"
+import {
+  isFromHeroForm,
+  storeLastSubmission,
+  clearHeroSubmission,
+  getDeviceType,
+  submitFormData,
+} from "@/lib/form-utils"
 
 export default function GetStartedPage() {
   const searchParams = useSearchParams()
@@ -32,7 +38,7 @@ export default function GetStartedPage() {
     setError(null)
 
     try {
-      // Simplified data collection
+      // Prepare form data
       const formData = {
         name,
         email,
@@ -44,20 +50,11 @@ export default function GetStartedPage() {
         isFromHero: isFromHeroForm(),
       }
 
-      // Store submission in sessionStorage
+      // Store submission in session storage
       storeLastSubmission(formData)
 
-      // Send to API with minimal error handling
-      try {
-        await fetch("/api/webhook", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        })
-      } catch (error) {
-        console.error("API error:", error)
-        // Continue even if API fails
-      }
+      // Submit to API endpoint
+      await submitFormData(formData)
 
       // Clear hero submission data after successful get-started submission
       clearHeroSubmission()
@@ -67,6 +64,7 @@ export default function GetStartedPage() {
     } catch (error) {
       console.error("Error:", error)
       setError("There was a problem submitting the form. Please try again.")
+      // Still redirect even if submission fails
       router.push("/calendar?submitted=true")
     } finally {
       setIsSubmitting(false)

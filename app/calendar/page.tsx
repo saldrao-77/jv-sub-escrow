@@ -5,6 +5,7 @@ import type React from "react"
 import { useEffect, useState, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { X } from "lucide-react"
+import { submitFormData } from "@/lib/form-utils"
 
 export default function CalendarPage() {
   const searchParams = useSearchParams()
@@ -17,7 +18,7 @@ export default function CalendarPage() {
     const isSubmitted = searchParams.get("submitted") === "true"
     setShowThankYou(isSubmitted)
 
-    // Simplified webhook trigger
+    // Track calendar visit
     if (isSubmitted) {
       try {
         // Minimal data for tracking
@@ -26,12 +27,8 @@ export default function CalendarPage() {
           submittedAt: new Date().toISOString(),
         }
 
-        // Fire and forget - don't wait for response
-        fetch("/api/webhook", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        }).catch((err) => console.error("Webhook error:", err))
+        // Submit to API endpoint
+        submitFormData(data).catch((err) => console.error("Webhook error:", err))
       } catch (error) {
         console.error("Error triggering webhook:", error)
       }

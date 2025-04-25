@@ -7,7 +7,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { storeLastSubmission, getDeviceType } from "@/lib/form-utils"
+import { storeLastSubmission, getDeviceType, submitFormData } from "@/lib/form-utils"
 
 export function CtaSection() {
   const [email, setEmail] = useState("")
@@ -24,7 +24,7 @@ export function CtaSection() {
     setError(null)
 
     try {
-      // Simplified data collection
+      // Prepare form data
       const formData = {
         name,
         email,
@@ -35,26 +35,18 @@ export function CtaSection() {
         deviceType: getDeviceType(),
       }
 
-      // Store submission in sessionStorage
+      // Store submission in session storage
       storeLastSubmission(formData)
 
-      // Send to API with minimal error handling
-      try {
-        await fetch("/api/webhook", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        })
-      } catch (error) {
-        console.error("API error:", error)
-        // Continue even if API fails
-      }
+      // Submit to API endpoint
+      await submitFormData(formData)
 
       // Redirect to the calendar page
       router.push("/calendar?submitted=true")
     } catch (error) {
       console.error("Error:", error)
       setError("There was a problem submitting the form. Please try again.")
+      // Still redirect even if submission fails
       router.push("/calendar?submitted=true")
     } finally {
       setIsSubmitting(false)

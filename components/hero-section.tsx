@@ -8,7 +8,7 @@ import { Shield, CheckCircle, Clock, Phone, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { storeHeroSubmission, getDeviceType } from "@/lib/form-utils"
+import { storeHeroSubmission, getDeviceType, submitFormData } from "@/lib/form-utils"
 
 export function HeroSection() {
   const [email, setEmail] = useState("")
@@ -34,7 +34,7 @@ export function HeroSection() {
       setIsSubmitting(true)
 
       try {
-        // Simplified data collection
+        // Prepare form data
         const formData = {
           email,
           source: "hero",
@@ -42,25 +42,17 @@ export function HeroSection() {
           deviceType: getDeviceType(),
         }
 
-        // Store the hero submission in sessionStorage to track the journey
+        // Store submission in session storage
         storeHeroSubmission(formData)
 
-        // Send to API with minimal error handling
-        try {
-          await fetch("/api/webhook", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formData),
-          })
-        } catch (error) {
-          console.error("API error:", error)
-          // Continue even if API fails
-        }
+        // Submit to API endpoint
+        await submitFormData(formData)
 
         // Redirect to get-started page with email prefilled
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
       } catch (error) {
         console.error("Error:", error)
+        // Still redirect even if submission fails
         router.push(`/get-started?email=${encodeURIComponent(email)}&from=hero`)
       } finally {
         setIsSubmitting(false)
